@@ -1,0 +1,82 @@
+import time
+import sys
+from rgbmatrix import RGBMatrix, RGBMatrixOptions
+
+# Configuration
+WIDTH = 64
+HEIGHT = 32
+TRAIL_DELAY = 5
+
+# Setup matrix
+options = RGBMatrixOptions()
+options.rows = HEIGHT
+options.cols = WIDTH
+options.chain_length = 1
+options.parallel = 1
+options.hardware_mapping = 'regular'  # Use 'adafruit-hat' if using bonnet
+matrix = RGBMatrix(options=options)
+
+# Helper functions
+def create_circle(canvas, x, y, color):
+    r, g, b = color
+    for dx, dy in [(0,0), (1,0), (-1,0), (0,1), (0,-1)]:
+        xx, yy = x+dx, y+dy
+        if 0 <= xx < WIDTH and 0 <= yy < HEIGHT:
+            canvas.SetPixel(xx, yy, r, g, b)
+
+def get_color_by_stage(stage):
+    colors = {
+        0: (255, 0, 0),      # Bright red
+        1: (187, 0, 0),
+        2: (119, 0, 0),
+        3: (51, 0, 0),
+        4: (0, 0, 0),        # Off
+    }
+    return colors.get(stage, (0, 0, 0))
+
+def main():
+    led_list = []
+    canvas = matrix.CreateFrameCanvas()
+    frame_count = 0
+
+    while True:
+        # Read from stdin (can be piped from USB or socket)
+        if not sys.stdin.isatty():
+            line = sys.stdin.readline().strip()
+        else:
+            line = input("> ").strip()
+
+        if not line:
+            continue
+
+        # Update old trail LEDs
+        new_led_list = []
+        for led in led_list:
+            x, y, stage = led
+            color = get_color_by_stage(stage)
+            create_circle(canvas, x, y, color)
+            if stage < 4:
+                new_led_list.append([x, y, stage + 1])
+        led_list = new_led_list
+
+        if line in ["0", "0 0", "0 0 0"]:
+            # New frame signal; handled above
+            pass
+        else:
+            parts = line.split()
+            if parts[0] == "0":
+                parts = parts[1:]
+            for i in range(0, len(parts), 2):
+                try:
+                    x = int(parts[i])
+                    y = int(parts[i+1])
+                    create_circle(canvas, x, y, (255, 0, 0))
+                    led_list.append([x, y, 0])
+                except:
+                    continue
+
+        canvas = matrix.SwapOnVSync(canvas)
+        time.sleep(0.05)
+
+if __name__ == '__main__':
+    main()
